@@ -82,7 +82,7 @@ th button .arr{color:var(--gold);margin-left:4px}
 </head>
 <body>
 <header>
-  <div class="top"><h1>Too Many Cucks</h1><label class="note" style="color:#c8d6cd">Season <select id="season"></select></label></div>
+  <div class="top"><h1>Too Many Cucks</h1><span class="note" style="color:#c8d6cd"><span id="sn"></span> <label>Season <select id="season"></select></label></span></div>
   <nav role="tablist" id="tabs"></nav>
 </header>
 <main id="view" aria-live="polite"></main>
@@ -90,7 +90,8 @@ th button .arr{color:var(--gold);margin-left:4px}
 const $=s=>document.querySelector(s), esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const f1=n=>(+n).toFixed(1), f2=n=>(+n).toFixed(2);
 const TABS=[['now','This Week'],['prev','Previous Matchups'],['mgr','Managers'],['season','Over the Season']];
-let season,info,tab='now',mgrId=null;
+let season,latest,curWeek=null,info,tab='now',mgrId=null;
+const crown=c=>c?'<span title="League Champion" aria-label="League Champion">👑</span> ':'';
 const api=async p=>{const r=await fetch(`/api/${p}`);const j=await r.json();if(!r.ok)throw new Error(j.error||'Request failed');return j};
 const fail=e=>$('#view').innerHTML=`<div class="err">${esc(e.message)}</div>`;
 const NFL={1:'atl',2:'buf',3:'chi',4:'cin',5:'cle',6:'dal',7:'den',8:'det',9:'gb',10:'ten',11:'ind',12:'kc',13:'lv',14:'lar',15:'mia',16:'min',17:'ne',18:'no',19:'nyg',20:'nyj',21:'phi',22:'ari',23:'pit',24:'lac',25:'sf',26:'sea',27:'tb',28:'wsh',29:'car',30:'jax',33:'bal',34:'hou'};
@@ -98,16 +99,22 @@ const abbr=t=>(NFL[t]||'FA').toUpperCase();
 const logo=t=>NFL[t]?`<img class="tl" src="https://a.espncdn.com/i/teamlogos/nfl/500/${NFL[t]}.png" alt="${abbr(t)}" title="${abbr(t)}" loading="lazy" onerror="this.style.display='none'">`:'';
 const img=id=>`<img class="hs" src="https://a.espncdn.com/i/headshots/nfl/players/full/${id}.png" alt="" loading="lazy" onerror="this.classList.add('none')">`;
 
+function fillSeasons(x){
+  const cur=season;latest=x.default;
+  $('#season').innerHTML=x.seasons.map(v=>`<option>${v}</option>`).join('');
+  $('#season').value=season=x.seasons.includes(cur)?cur:x.default;
+  $('#sn').textContent=x.loading?'Loading earlier seasons…':'';
+}
 async function boot(){
-  const s=await api('seasons').catch(fail); if(!s)return;
-  $('#season').innerHTML=s.seasons.map(x=>`<option>${x}</option>`).join('');
-  $('#season').value=season=s.default;
+  const x=await api('seasons').catch(fail); if(!x)return;
+  fillSeasons(x);
   $('#season').onchange=e=>{season=e.target.value;mgrId=null;load()};
+  $('#season').onfocus=async()=>{const n=await api('seasons').catch(()=>null);if(n)fillSeasons(n)};
   $('#tabs').innerHTML=TABS.map(([k,l])=>`<button role="tab" data-k="${k}">${l}</button>`).join('');
   $('#tabs').onclick=e=>{const k=e.target.dataset.k;if(k){tab=k;render()}};
   load();
 }
-async function load(){try{info=await api(`${season}/info`);render()}catch(e){fail(e)}}
+async function load(){try{info=await api(`${season}/info`);if(season===latest)curWeek=info.current;render()}catch(e){fail(e)}}
 function render(){
   $('#view').onclick=null;
   document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.k===tab));
@@ -165,8 +172,17 @@ function detail(g,slots){
   </table></div></div>`;
 }
 async function viewNow(){
-  const wk=await api(`${season}/week/${info.current}`);
-  $('#view').innerHTML=`<div class="bar"><h2>Week ${wk.week} Matchups</h2><span class="note">${wk.live?'Scores update during games. ':''}Last refreshed ${new Date(info.updated).toLocaleString()}</span></div><div id="m"></div>`;
+  const throwback=season!==latest;
+  let w=info.current;
+  if(throwback){
+    if(curWeek==null){try{curWeek=(await api(`${latest}/info`)).current}catch(e){}}
+    w=curWeek||1;
+    if(w>info.completed){$('#view').innerHTML=`<div class="bar"><h2>Throwback Matchups - Week ${w}</h2></div><p class="note">The ${season} season has no Week ${w} matchups.</p>`;return}
+  }
+  const wk=await api(`${season}/week/${w}`);
+  $('#view').innerHTML=throwback
+   ?`<div class="bar"><h2>Throwback Matchups - Week ${w}</h2><span class="note">From the ${season} season</span></div><div id="m"></div>`
+   :`<div class="bar"><h2>Week ${wk.week} Matchups</h2><span class="note">${wk.live?'Scores update during games. ':''}Last refreshed ${new Date(info.updated).toLocaleString()}</span></div><div id="m"></div>`;
   matchups($('#m'),wk);
 }
 async function viewPrev(){
@@ -185,10 +201,10 @@ const FLEX=['RB','WR','TE'], POSCHIPS=['QB','RB','WR','TE','FLEX','D/ST','K'], R
 const SO=[0,2,4,6,3,5,23,7,16,17,20,21];
 async function viewMgr(){
   if(mgrId==null||!info.teams.some(t=>t.id===mgrId))mgrId=info.teams[0].id;
-  $('#view').innerHTML=`<div class="bar"><h2>Managers</h2><select id="mg" aria-label="Manager">${info.teams.map(t=>`<option value="${t.id}">${esc(t.manager||'Unknown')} — ${esc(t.name)}</option>`).join('')}</select></div><div id="m"></div>`;
+  $('#view').innerHTML=`<div class="bar"><h2>Managers</h2><select id="mg" aria-label="Manager">${info.teams.map(t=>`<option value="${t.id}">${t.champion?'👑 ':''}${esc(t.manager||'Unknown')} — ${esc(t.name)}</option>`).join('')}</select></div><div id="m"></div>`;
   $('#mg').value=mgrId;
   const go=async()=>{mgrId=+$('#mg').value;const m=await api(`${season}/manager/${mgrId}`);
-    $('#m').innerHTML=`<h3 style="font:700 28px var(--head);margin:0 0 12px">${esc(m.name)} <span class="note">${esc(m.manager)}</span></h3>
+    $('#m').innerHTML=`<h3 style="font:700 28px var(--head);margin:0 0 12px">${crown(m.champion)}${esc(m.name)} <span class="note">${esc(m.manager)}</span></h3>
     <div class="two"><div class="box"><h3>Current Roster</h3><div id="rost"></div></div>
     <div><div class="box" style="margin-bottom:16px"><h3>Scoring Leaders: Points Started</h3>${list(m.leadersStarted,lead)}<h3 style="margin-top:14px">Scoring Leaders: Total Points</h3>${list(m.leadersTotal,lead)}</div>
     <div class="box"><h3>Top Started Performances</h3>${list(m.bestStarted,perf)}<h3 style="margin-top:14px">Top Bench Performances</h3>${list(m.bestBench,perf)}</div></div></div>
@@ -237,7 +253,7 @@ async function viewSeason(){
   const draw=()=>{
     const x=$('#view .scroll')?.scrollLeft||0;
     rows.sort((a,b)=>sortKey==='name'?sortDir*a.name.localeCompare(b.name):sortDir*(a[sortKey]-b[sortKey]));
-    $('#view').innerHTML=`<div class="bar"><h2>Over the Season</h2><span class="note">Through week ${info.completed}. Select a column to sort, or a team or manager to open their page.</span></div><div class="scroll"><table class="stick"><thead><tr>${COLS.map(([k,l,full,def])=>`<th ${k===sortKey?`aria-sort="${sortDir<0?'descending':'ascending'}"`:''}><button data-k="${k}" title="${full}: ${def}" aria-label="${full}">${l}${k===sortKey?`<span class="arr">${sortDir<0?'▼':'▲'}</span>`:''}</button></th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr><td><button class="lnk" data-go="${r.id}">${esc(r.name)}</button><button class="lnk sm" data-go="${r.id}">${esc(r.manager)}</button></td><td>${r.record}</td><td>${r.totalRecord}</td><td>${f2(r.pf)}</td><td>${f2(r.pa)}</td><td>${f2(r.diff)}</td><td>${f2(r.pfpg)}</td><td>${f2(r.papg)}</td><td>${f2(r.ppf)}</td><td>${f2(r.ppa)}</td><td>${f1(r.pctPf)}%</td><td>${f1(r.pctPa)}%</td></tr>`).join('')}</tbody></table></div>`;
+    $('#view').innerHTML=`<div class="bar"><h2>Over the Season</h2><span class="note">Through week ${info.completed}. Select a column to sort, or a team or manager to open their page.</span></div><div class="scroll"><table class="stick"><thead><tr>${COLS.map(([k,l,full,def])=>`<th ${k===sortKey?`aria-sort="${sortDir<0?'descending':'ascending'}"`:''}><button data-k="${k}" title="${full}: ${def}" aria-label="${full}">${l}${k===sortKey?`<span class="arr">${sortDir<0?'▼':'▲'}</span>`:''}</button></th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr><td><button class="lnk" data-go="${r.id}">${esc(r.name)}</button>${r.champion?' <span title="League Champion" aria-label="League Champion">👑</span>':''}<button class="lnk sm" data-go="${r.id}">${esc(r.manager)}</button></td><td>${r.record}</td><td>${r.totalRecord}</td><td>${f2(r.pf)}</td><td>${f2(r.pa)}</td><td>${f2(r.diff)}</td><td>${f2(r.pfpg)}</td><td>${f2(r.papg)}</td><td>${f2(r.ppf)}</td><td>${f2(r.ppa)}</td><td>${f1(r.pctPf)}%</td><td>${f1(r.pctPa)}%</td></tr>`).join('')}</tbody></table></div>`;
     $('#view .scroll').scrollLeft=x;
   };
   $('#view').onclick=e=>{
