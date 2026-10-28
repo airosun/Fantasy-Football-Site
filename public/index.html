@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#14372b">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%2314372b%27/%3E%3Cellipse cx=%2716%27 cy=%2716%27 rx=%2711%27 ry=%277%27 fill=%27%23e3b23c%27/%3E%3C/svg%3E">
 <title>Too Many Cucks — League Stats</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
@@ -50,6 +53,8 @@ td.win{color:var(--win);font-weight:600}td.loss{color:var(--loss)}
 .err{background:#f6dcd8;color:#6b1f18;padding:12px 14px;border-radius:6px}
 @media(max-width:600px){h1{font-size:28px}}
 .mt{table-layout:fixed;min-width:760px}
+.mt col.cp{width:84px}.mt col.cm{width:190px}
+@media(max-width:600px){.mt col.cp{width:56px}.mt col.cm{width:64px}}
 .mt th,.mt td{padding:7px 8px}
 .mt td.pl{text-align:left;overflow:hidden;text-overflow:ellipsis}
 .mt td.pl.r,.mt th.r{text-align:right}
@@ -78,6 +83,31 @@ details.box summary{font:700 22px var(--head);cursor:pointer}
 .stick th:not(:first-child),.stick td:not(:first-child){text-align:center}
 th button[title]{cursor:help}
 th button .arr{color:var(--gold);margin-left:4px}
+
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.games{grid-template-columns:repeat(auto-fill,minmax(min(310px,100%),1fr))}
+.two{grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))}
+.lnk.sm{width:-moz-fit-content;width:fit-content}
+button,select{touch-action:manipulation}
+.scroll{-webkit-overflow-scrolling:touch}
+.guide{margin-top:14px}
+.guide summary{cursor:pointer;font:700 18px var(--head)}
+.guide dl{margin:10px 0 0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px}
+.guide dt{font-weight:600}.guide dd{margin:0}
+@media(max-width:600px){
+  main{padding:14px 12px}
+  .bar h2{font-size:22px}
+  .mt{min-width:0;width:100%;font-size:14px}
+  .mt th,.mt td{padding:6px 4px;white-space:normal}
+  .mt small{display:none}
+  .mt td.mid{font-size:12px}
+  .mt tr.fin td{font-size:20px}
+  .mt tr.fin td.mid{font-size:13px}
+  .mt .tl{width:16px;height:16px;margin:0 3px}
+  .row .s{font-size:24px}
+  .detail{padding:10px}
+  .game{min-width:0}
+}
 </style>
 </head>
 <body>
@@ -86,8 +116,9 @@ th button .arr{color:var(--gold);margin-left:4px}
   <nav role="tablist" id="tabs"></nav>
 </header>
 <main id="view" aria-live="polite"></main>
+<noscript><p style="padding:20px">This site needs JavaScript turned on to show league stats.</p></noscript>
 <script>
-const $=s=>document.querySelector(s), esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $=s=>document.querySelector(s), esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const f1=n=>(+n).toFixed(1), f2=n=>(+n).toFixed(2);
 const TABS=[['now','This Week'],['prev','Previous Matchups'],['mgr','Managers'],['season','Over the Season']];
 let season,latest,curWeek=null,info,tab='now',mgrId=null;
@@ -146,19 +177,19 @@ function detail(g,slots){
   const plain=(label,av,hv)=>`<tr><td></td><td class="pt a">${av}</td><td class="mid">${label}</td><td class="pt h">${hv}</td><td></td></tr>`;
   // one row per lineup slot, so an empty slot stays empty instead of shifting players up
   const slotRows=(A,H,slots)=>{
-    const take=t=>{const m={};t.starters.forEach(p=>(m[p.slot]??=[]).push(p));return m};
+    const take=t=>{const m={};t.starters.forEach(p=>(m[p.slot]||(m[p.slot]=[])).push(p));return m};
     const ma=take(A),mh=take(H),used={};let out='';
     const known=new Set(slots);
     const order=slots.length?slots.slice():[];
     // any starter in a slot the league config didn't list still gets shown
     [...A.starters,...H.starters].forEach(p=>{if(!known.has(p.slot)){known.add(p.slot);order.push(p.slot)}});
-    order.forEach(sl=>{const i=used[sl]=(used[sl]??-1)+1;const x=(ma[sl]||[])[i],y=(mh[sl]||[])[i];
+    order.forEach(sl=>{const i=used[sl]=(sl in used?used[sl]:-1)+1;const x=(ma[sl]||[])[i],y=(mh[sl]||[])[i];
       const cell=(p,right)=>p?pName(p,right):'<span class="note">Empty</span>';
       out+=`<tr><td class="pl">${cell(x,false)}</td><td class="pt a">${x?f2(x.pts):''}</td><td class="mid">${SLOT_LABEL[sl]||''}</td><td class="pt h">${y?f2(y.pts):''}</td><td class="pl r">${cell(y,true)}</td></tr>`});
     return out};
   const fw=a.score>h.score?'away':a.score<h.score?'home':'tie';
   return `<div class="detail"><div class="scroll"><table class="mt">
-  <colgroup><col><col style="width:84px"><col style="width:190px"><col style="width:84px"><col></colgroup>
+  <colgroup><col><col class="cp"><col class="cm"><col class="cp"><col></colgroup>
   <tr><th class="l" colspan="2">${esc(a.name)}<div class="note">${esc(a.manager)}</div></th><th></th><th class="r" colspan="2">${esc(h.name)}<div class="note">${esc(h.manager)}</div></th></tr>
   ${slotRows(a,h,slots)}
   <tr class="fin"><td></td><td class="pt a ${win('away',fw)}">${f2(a.score)}</td><td class="mid">Final Score</td><td class="pt h ${win('home',fw)}">${f2(h.score)}</td><td></td></tr>
@@ -251,14 +282,14 @@ let sortKey='winPct',sortDir=-1;
 async function viewSeason(){
   const rows=await api(`${season}/standings`);
   const draw=()=>{
-    const x=$('#view .scroll')?.scrollLeft||0;
+    const sc0=$('#view .scroll'),x=sc0?sc0.scrollLeft:0;
     rows.sort((a,b)=>sortKey==='name'?sortDir*a.name.localeCompare(b.name):sortDir*(a[sortKey]-b[sortKey]));
-    $('#view').innerHTML=`<div class="bar"><h2>Over the Season</h2><span class="note">Through week ${info.completed}. Select a column to sort, or a team or manager to open their page.</span></div><div class="scroll"><table class="stick"><thead><tr>${COLS.map(([k,l,full,def])=>`<th ${k===sortKey?`aria-sort="${sortDir<0?'descending':'ascending'}"`:''}><button data-k="${k}" title="${full}: ${def}" aria-label="${full}">${l}${k===sortKey?`<span class="arr">${sortDir<0?'▼':'▲'}</span>`:''}</button></th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr><td><button class="lnk" data-go="${r.id}">${esc(r.name)}</button>${r.champion?' <span title="League Champion" aria-label="League Champion">👑</span>':''}<button class="lnk sm" data-go="${r.id}">${esc(r.manager)}</button></td><td>${r.record}</td><td>${r.totalRecord}</td><td>${f2(r.pf)}</td><td>${f2(r.pa)}</td><td>${f2(r.diff)}</td><td>${f2(r.pfpg)}</td><td>${f2(r.papg)}</td><td>${f2(r.ppf)}</td><td>${f2(r.ppa)}</td><td>${f1(r.pctPf)}%</td><td>${f1(r.pctPa)}%</td></tr>`).join('')}</tbody></table></div>`;
+    $('#view').innerHTML=`<div class="bar"><h2>Over the Season</h2><span class="note">Through week ${info.completed}. Select a column to sort, or a team or manager to open their page.</span></div><div class="scroll"><table class="stick"><thead><tr>${COLS.map(([k,l,full,def])=>`<th ${k===sortKey?`aria-sort="${sortDir<0?'descending':'ascending'}"`:''}><button data-k="${k}" title="${full}: ${def}" aria-label="${full}">${l}${k===sortKey?`<span class="arr">${sortDir<0?'▼':'▲'}</span>`:''}</button></th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr><td><button class="lnk" data-go="${r.id}">${esc(r.name)}</button>${r.champion?' <span title="League Champion" aria-label="League Champion">👑</span>':''}<button class="lnk sm" data-go="${r.id}">${esc(r.manager)}</button></td><td>${r.record}</td><td>${r.totalRecord}</td><td>${f2(r.pf)}</td><td>${f2(r.pa)}</td><td>${f2(r.diff)}</td><td>${f2(r.pfpg)}</td><td>${f2(r.papg)}</td><td>${f2(r.ppf)}</td><td>${f2(r.ppa)}</td><td>${f1(r.pctPf)}%</td><td>${f1(r.pctPa)}%</td></tr>`).join('')}</tbody></table></div><details class="guide box"><summary>Column Guide</summary><dl>${COLS.slice(1).map(c=>`<dt>${c[1]}</dt><dd><strong>${c[2]}:</strong> ${c[3]}</dd>`).join('')}</dl></details>`;
     $('#view .scroll').scrollLeft=x;
   };
   $('#view').onclick=e=>{
     const g=e.target.closest('[data-go]');if(g){mgrId=+g.dataset.go;tab='mgr';render();return}
-    const k=e.target.closest('[data-k]')?.dataset.k;if(!k)return;sortDir=k===sortKey?-sortDir:(k==='name'?1:-1);sortKey=k;draw()};
+    const kb=e.target.closest('[data-k]'),k=kb&&kb.dataset.k;if(!k)return;sortDir=k===sortKey?-sortDir:(k==='name'?1:-1);sortKey=k;draw()};
   draw();
 }
 boot();
