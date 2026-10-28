@@ -68,12 +68,12 @@ function weekView(S, w) {
 function info(S) {
   return {
     season: S.season, current: S.current, completed: S.completed, totalWeeks: S.total, updated: S.updated,
-    teams: S.teams.map((t) => ({ id: t.id, name: t.name, manager: t.manager })),
+    teams: S.teams.map((t) => ({ id: t.id, name: t.name, manager: t.manager, champion: !!t.champion })),
   };
 }
 
 function standings(S) {
-  const rows = Object.fromEntries(S.teams.map((t) => [t.id, { id: t.id, name: t.name, manager: t.manager, w: 0, l: 0, t: 0, tw: 0, tl: 0, tt: 0, pf: 0, pa: 0, ppf: 0, ppa: 0, gp: 0 }]));
+  const rows = Object.fromEntries(S.teams.map((t) => [t.id, { id: t.id, name: t.name, manager: t.manager, champion: !!t.champion, w: 0, l: 0, t: 0, tw: 0, tl: 0, tt: 0, pf: 0, pa: 0, ppf: 0, ppa: 0, gp: 0 }]));
   for (let w = 1; w <= S.completed; w++) {
     const games = S.weeks[w] || [];
     const all = games.flatMap((g) => [g.home.score, g.away.score]);
@@ -89,7 +89,7 @@ function standings(S) {
     });
   }
   return Object.values(rows).map((r) => ({
-    id: r.id, name: r.name, manager: r.manager,
+    id: r.id, name: r.name, manager: r.manager, champion: r.champion,
     record: rec(r.w, r.l, r.t).str, winPct: r.gp ? (r.w + r.t / 2) / r.gp : 0,
     totalRecord: rec(r.tw, r.tl, r.tt).str, totalPct: r.tw + r.tl + r.tt ? (r.tw + r.tt / 2) / (r.tw + r.tl + r.tt) : 0,
     pf: r2(r.pf), pa: r2(r.pa), diff: r2(r.pf - r.pa),
@@ -136,7 +136,7 @@ function managerView(S, id) {
       }),
     })).filter((t) => t.lines.length).sort((a, b) => b.date - a.date);
   return {
-    id, name: tm.name, manager: tm.manager,
+    id, name: tm.name, manager: tm.manager, champion: !!tm.champion,
     roster: tm.roster.map((p) => ({ id: p.id, name: p.name, team: p.team, pos: POS[p.pos] || '?', slot: p.slot, role: BENCH.has(p.slot) ? 'Bench' : 'Starter', ir: p.slot === 21 })),
     leadersStarted: lead('started', 'sg'), leadersTotal: lead('total', 'tg'),
     bestStarted: best(true), bestBench: best(false),

@@ -9,7 +9,7 @@ Stats site for an ESPN fantasy football league. Pages: This Week, Previous Match
    - Start command: `npm start`
 3. In Render's **Environment** tab, add:
    - `LEAGUE_ID` = 1869959
-   - `SEASONS` = 2026   (add past seasons later, e.g. `2024,2025,2026`)
+   - `SEASONS` is optional. Leave it out and every season your league has is found automatically. To limit it, set e.g. `2024,2025,2026`.
    - `ESPN_S2` = your espn_s2 cookie value
    - `SWID` = your SWID cookie value (including the braces)
 4. Deploy. The site refreshes from ESPN every 15 minutes and picks up the new week automatically.

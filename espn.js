@@ -7,11 +7,18 @@ const headers = () => ({
   Accept: 'application/json',
 });
 
+// NFL season that is current right now (a new season starts around July)
+const nflSeason = () => { const d = new Date(); return d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1; };
+
 async function call(season, query) {
-  const url = `${BASE}/${season}/segments/0/leagues/${process.env.LEAGUE_ID}?${query}`;
+  // ESPN serves seasons before 2018 from a different (leagueHistory) endpoint
+  const url = +season >= 2018
+    ? `${BASE}/${season}/segments/0/leagues/${process.env.LEAGUE_ID}?${query}`
+    : `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/leagueHistory/${process.env.LEAGUE_ID}?seasonId=${season}&${query}`;
   const res = await fetch(url, { headers: headers() });
   if (!res.ok) throw new Error(`ESPN returned ${res.status} for season ${season} (${query.split('&')[0]})`);
-  return res.json();
+  const j = await res.json();
+  return Array.isArray(j) ? j[0] : j;
 }
 
 const player = (e) => ({
@@ -52,7 +59,7 @@ async function refreshSeason(season, prev) {
   const info = await call(season, 'view=mTeam&view=mSettings&view=mRoster');
   const total = info.settings.scheduleSettings.matchupPeriodCount;
   const current = Math.min(info.status?.currentMatchupPeriod || info.scoringPeriodId || 1, total);
-  const finished = info.status?.isActive === false && current >= total;
+  const finished = current >= total && (info.status?.isActive === false || +season < nflSeason());
   const members = {};
   (info.members || []).forEach((m) => {
     members[m.id] = `${m.firstName || ''} ${m.lastName || ''}`.trim() || m.displayName;
@@ -63,6 +70,7 @@ async function refreshSeason(season, prev) {
     roster.forEach((p) => (names[p.id] = p.name));
     return {
       id: t.id,
+      champion: !!finished && t.rankCalculatedFinal === 1,
       name: t.name || `${t.location} ${t.nickname}`,
       manager: members[t.primaryOwner] || members[(t.owners || [])[0]] || '',
       roster,
@@ -101,4 +109,4 @@ async function refreshSeason(season, prev) {
   };
 }
 
-module.exports = { refreshSeason };
+module.exports = { refreshSeason, nflSeason };
