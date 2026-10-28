@@ -74,6 +74,9 @@ details.box summary{font:700 22px var(--head);cursor:pointer}
 .lnk:hover,.lnk:focus-visible{color:var(--win);border-color:var(--win)}
 .stick{min-width:1300px}
 .stick th:first-child,.stick td:first-child{position:sticky;left:0;z-index:2;background:var(--card);box-shadow:1px 0 0 var(--line)}
+.tl{width:18px;height:18px;object-fit:contain;vertical-align:middle;margin:0 6px}
+.stick th:not(:first-child),.stick td:not(:first-child){text-align:center}
+th button[title]{cursor:help}
 th button .arr{color:var(--gold);margin-left:4px}
 </style>
 </head>
@@ -90,6 +93,9 @@ const TABS=[['now','This Week'],['prev','Previous Matchups'],['mgr','Managers'],
 let season,info,tab='now',mgrId=null;
 const api=async p=>{const r=await fetch(`/api/${p}`);const j=await r.json();if(!r.ok)throw new Error(j.error||'Request failed');return j};
 const fail=e=>$('#view').innerHTML=`<div class="err">${esc(e.message)}</div>`;
+const NFL={1:'atl',2:'buf',3:'chi',4:'cin',5:'cle',6:'dal',7:'den',8:'det',9:'gb',10:'ten',11:'ind',12:'kc',13:'lv',14:'lar',15:'mia',16:'min',17:'ne',18:'no',19:'nyg',20:'nyj',21:'phi',22:'ari',23:'pit',24:'lac',25:'sf',26:'sea',27:'tb',28:'wsh',29:'car',30:'jax',33:'bal',34:'hou'};
+const abbr=t=>(NFL[t]||'FA').toUpperCase();
+const logo=t=>NFL[t]?`<img class="tl" src="https://a.espncdn.com/i/teamlogos/nfl/500/${NFL[t]}.png" alt="${abbr(t)}" title="${abbr(t)}" loading="lazy" onerror="this.style.display='none'">`:'';
 const img=id=>`<img class="hs" src="https://a.espncdn.com/i/headshots/nfl/players/full/${id}.png" alt="" loading="lazy" onerror="this.classList.add('none')">`;
 
 async function boot(){
@@ -123,7 +129,7 @@ function matchups(el,wk){
 function detail(g){
   const a=g.away,h=g.home;
   const win=(side,w)=>w===side?'win':(w==='tie'?'':'loss');
-  const pName=(p,right)=>p?`${right?'':esc(p.name)}<small>${POS[p.pos]||''}</small>${right?esc(p.name):''}`:'';
+  const pName=(p,right)=>p?(right?`<small>${POS[p.pos]||''}</small>${esc(p.name)}${logo(p.team)}`:`${logo(p.team)}${esc(p.name)}<small>${POS[p.pos]||''}</small>`):'';
   const lineRows=(A,H,labelFn)=>{
     const n=Math.max(A.length,H.length);let out='';
     for(let i=0;i<n;i++){const x=A[i],y=H[i];
@@ -162,8 +168,8 @@ async function viewPrev(){
 
 /* ---------- Managers ---------- */
 const list=(a,fmt)=>a.length?`<ul class="pl">${a.map(fmt).join('')}</ul>`:'<p class="note">Nothing yet.</p>';
-const lead=p=>`<li>${img(p.id)}<span><strong>${esc(p.name)}</strong><br>${f1(p.pts)} <span class="note">(${f1(p.avg)} avg)</span></span></li>`;
-const perf=p=>`<li>${img(p.id)}<span><strong>${esc(p.name)}</strong><br>${f1(p.pts)} <span class="note">Week ${p.week}</span></span></li>`;
+const lead=p=>`<li>${img(p.id)}<span><strong>${esc(p.name)}</strong>${logo(p.team)}<br>${f1(p.pts)} <span class="note">(${f1(p.avg)} avg)</span></span></li>`;
+const perf=p=>`<li>${img(p.id)}<span><strong>${esc(p.name)}</strong>${logo(p.team)}<br>${f1(p.pts)} <span class="note">Week ${p.week}</span></span></li>`;
 const FLEX=['RB','WR','TE'], POSCHIPS=['QB','RB','WR','TE','FLEX','D/ST','K'], ROLECHIPS=['Starter','Bench'];
 const SO=[0,2,4,6,3,5,23,7,16,17,20,21];
 async function viewMgr(){
@@ -188,12 +194,12 @@ function roster(rows){
     const show=rows.filter(p=>{
       const pOk=!pos.size||[...pos].some(c=>c==='FLEX'?FLEX.includes(p.pos):c===p.pos);
       return pOk&&(!role.size||role.has(p.role))});
-    const val=p=>sk==='slot'?(SO.indexOf(p.slot)<0?99:SO.indexOf(p.slot)):sk==='name'?p.name:sk==='pos'?p.pos:p.role+(p.ir?' IR':'');
+    const val=p=>sk==='slot'?(SO.indexOf(p.slot)<0?99:SO.indexOf(p.slot)):sk==='name'?p.name:sk==='team'?abbr(p.team):sk==='pos'?p.pos:p.role+(p.ir?' IR':'');
     show.sort((x,y)=>{const a=val(x),b=val(y);return sd*(typeof a==='number'?a-b:a.localeCompare(b))});
     const chip=(g,v)=>`<button class="chip" data-g="${g}" data-v="${v}" aria-pressed="${(g==='p'?pos:role).has(v)}">${v}</button>`;
     const th=(k,l)=>`<th ${sk===k?`aria-sort="${sd<0?'descending':'ascending'}"`:''}><button data-s="${k}">${l}${sk===k?`<span class="arr">${sd<0?'▼':'▲'}</span>`:''}</button></th>`;
     $('#rost').innerHTML=`<div class="note">Position</div><div class="chips">${POSCHIPS.map(v=>chip('p',v)).join('')}</div><div class="note">Role</div><div class="chips">${ROLECHIPS.map(v=>chip('r',v)).join('')}</div>
-    <table><thead><tr>${th('name','Player')}${th('pos','Position')}${th('role','Role')}</tr></thead><tbody>${show.map(p=>`<tr><td>${esc(p.name)}</td><td>${p.pos}</td><td>${p.role}${p.ir?' (IR)':''}</td></tr>`).join('')||'<tr><td colspan="3" class="note">No players match these filters.</td></tr>'}</tbody></table>`;
+    <table><thead><tr>${th('name','Player')}${th('team','Team')}${th('pos','Position')}${th('role','Role')}</tr></thead><tbody>${show.map(p=>`<tr><td>${esc(p.name)}</td><td>${logo(p.team)}${abbr(p.team)}</td><td>${p.pos}</td><td>${p.role}${p.ir?' (IR)':''}</td></tr>`).join('')||'<tr><td colspan="4" class="note">No players match these filters.</td></tr>'}</tbody></table>`;
   };
   $('#rost').onclick=e=>{const c=e.target.closest('.chip'),b=e.target.closest('[data-s]');
     if(c){const set=c.dataset.g==='p'?pos:role;set.has(c.dataset.v)?set.delete(c.dataset.v):set.add(c.dataset.v);draw()}
@@ -202,13 +208,26 @@ function roster(rows){
 }
 
 /* ---------- Over the Season ---------- */
-const COLS=[['name','Team'],['winPct','Record'],['totalPct','Total Record'],['pf','Points For'],['pa','Points Against'],['diff','Point Differential'],['pfpg','Points For Per Game'],['papg','Points Against Per Game'],['ppf','Potential Points For'],['ppa','Potential Points Against'],['pctPf','% of Points For Scored'],['pctPa','% of Points Against Scored']];
+const COLS=[['name','Team','Team','The team and its manager.'],
+['winPct','Record','Record','Win-loss record against scheduled opponents.'],
+['totalPct','Total Record','Total Record','Record if the team played every other team every week.'],
+['pf','PF','Points For','Total points scored.'],
+['pa','PA','Points Against','Total points opponents have scored.'],
+['diff','Diff','Point Differential','The difference between Points For and Points Against.'],
+['pfpg','PFPG','Points For Per Game','Average points scored each week.'],
+['papg','PAPG','Points Against Per Game','Average opponent score each week.'],
+['ppf','PotPF','Potential Points For','How many total points could have been scored with an optimal lineup.'],
+['ppa','PotPA','Potential Points Against','How many total points opponents could have scored with optimal lineups.'],
+['pctPf','%PF','% of Points For Scored','What percentage of Potential Points were actually scored.'],
+['pctPa','%PA','% of Points Against Scored','What percentage of Potential Points opponents actually scored.']];
 let sortKey='winPct',sortDir=-1;
 async function viewSeason(){
   const rows=await api(`${season}/standings`);
   const draw=()=>{
+    const x=$('#view .scroll')?.scrollLeft||0;
     rows.sort((a,b)=>sortKey==='name'?sortDir*a.name.localeCompare(b.name):sortDir*(a[sortKey]-b[sortKey]));
-    $('#view').innerHTML=`<div class="bar"><h2>Over the Season</h2><span class="note">Through week ${info.completed}. Select a column to sort, or a team or manager to open their page.</span></div><div class="scroll"><table class="stick"><thead><tr>${COLS.map(([k,l])=>`<th ${k===sortKey?`aria-sort="${sortDir<0?'descending':'ascending'}"`:''}><button data-k="${k}">${l}${k===sortKey?`<span class="arr">${sortDir<0?'▼':'▲'}</span>`:''}</button></th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr><td><button class="lnk" data-go="${r.id}">${esc(r.name)}</button><button class="lnk sm" data-go="${r.id}">${esc(r.manager)}</button></td><td>${r.record}</td><td>${r.totalRecord}</td><td>${f1(r.pf)}</td><td>${f1(r.pa)}</td><td>${f1(r.diff)}</td><td>${f1(r.pfpg)}</td><td>${f1(r.papg)}</td><td>${f1(r.ppf)}</td><td>${f1(r.ppa)}</td><td>${f1(r.pctPf)}%</td><td>${f1(r.pctPa)}%</td></tr>`).join('')}</tbody></table></div>`;
+    $('#view').innerHTML=`<div class="bar"><h2>Over the Season</h2><span class="note">Through week ${info.completed}. Select a column to sort, or a team or manager to open their page.</span></div><div class="scroll"><table class="stick"><thead><tr>${COLS.map(([k,l,full,def])=>`<th ${k===sortKey?`aria-sort="${sortDir<0?'descending':'ascending'}"`:''}><button data-k="${k}" title="${full}: ${def}" aria-label="${full}">${l}${k===sortKey?`<span class="arr">${sortDir<0?'▼':'▲'}</span>`:''}</button></th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr><td><button class="lnk" data-go="${r.id}">${esc(r.name)}</button><button class="lnk sm" data-go="${r.id}">${esc(r.manager)}</button></td><td>${r.record}</td><td>${r.totalRecord}</td><td>${f1(r.pf)}</td><td>${f1(r.pa)}</td><td>${f1(r.diff)}</td><td>${f1(r.pfpg)}</td><td>${f1(r.papg)}</td><td>${f1(r.ppf)}</td><td>${f1(r.ppa)}</td><td>${f1(r.pctPf)}%</td><td>${f1(r.pctPa)}%</td></tr>`).join('')}</tbody></table></div>`;
+    $('#view .scroll').scrollLeft=x;
   };
   $('#view').onclick=e=>{
     const g=e.target.closest('[data-go]');if(g){mgrId=+g.dataset.go;tab='mgr';render();return}
