@@ -88,7 +88,7 @@ th button .arr{color:var(--gold);margin-left:4px}
 <main id="view" aria-live="polite"></main>
 <script>
 const $=s=>document.querySelector(s), esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const f1=n=>(+n).toFixed(1);
+const f1=n=>(+n).toFixed(1), f2=n=>(+n).toFixed(2);
 const TABS=[['now','This Week'],['prev','Previous Matchups'],['mgr','Managers'],['season','Over the Season']];
 let season,info,tab='now',mgrId=null;
 const api=async p=>{const r=await fetch(`/api/${p}`);const j=await r.json();if(!r.ok)throw new Error(j.error||'Request failed');return j};
@@ -119,7 +119,7 @@ const SLOT_ORDER=[0,2,4,6,3,5,23,7,16,17];
 const SLOT_LABEL={0:'QB',2:'RB',3:'RB/WR',4:'WR',5:'WR/TE',6:'TE',7:'OP',16:'D/ST',17:'K',23:'FLEX'};
 const POS={1:'QB',2:'RB',3:'WR',4:'TE',5:'K',16:'D/ST'};
 const rank=p=>{const i=SLOT_ORDER.indexOf(p.slot);return i<0?99:i};
-const rowHtml=(t,win)=>`<div class="row ${win?'w':''}"><span class="n">${esc(t.name)}<span class="m">${esc(t.manager)} · ${t.total.str} Total Record</span></span><span class="s">${f1(t.score)}</span></div>`;
+const rowHtml=(t,win)=>`<div class="row ${win?'w':''}"><span class="n">${esc(t.name)}<span class="m">${esc(t.manager)} · ${t.total.str} Total Record</span></span><span class="s">${f2(t.score)}</span></div>`;
 function matchups(el,wk){
   el.innerHTML=`<div class="games">${wk.games.map((g,i)=>`<button class="game" data-i="${i}" aria-pressed="false">${rowHtml(g.away,g.away.score>g.home.score)}${rowHtml(g.home,g.home.score>g.away.score)}</button>`).join('')}</div><div id="detail"></div>`;
   el.querySelector('.games').onclick=e=>{const b=e.target.closest('.game');if(!b)return;
@@ -133,9 +133,9 @@ function detail(g,slots){
   const lineRows=(A,H,labelFn)=>{
     const n=Math.max(A.length,H.length);let out='';
     for(let i=0;i<n;i++){const x=A[i],y=H[i];
-      out+=`<tr><td class="pl">${pName(x,false)}</td><td class="pt a">${x?f1(x.pts):''}</td><td class="mid">${labelFn(x||y)}</td><td class="pt h">${y?f1(y.pts):''}</td><td class="pl r">${pName(y,true)}</td></tr>`}
+      out+=`<tr><td class="pl">${pName(x,false)}</td><td class="pt a">${x?f2(x.pts):''}</td><td class="mid">${labelFn(x||y)}</td><td class="pt h">${y?f2(y.pts):''}</td><td class="pl r">${pName(y,true)}</td></tr>`}
     return out};
-  const stat=(label,av,hv,w)=>`<tr><td></td><td class="pt a ${win('away',w)}">${f1(av)}</td><td class="mid">${label}</td><td class="pt h ${win('home',w)}">${f1(hv)}</td><td></td></tr>`;
+  const stat=(label,av,hv,w)=>`<tr><td></td><td class="pt a ${win('away',w)}">${f2(av)}</td><td class="mid">${label}</td><td class="pt h ${win('home',w)}">${f2(hv)}</td><td></td></tr>`;
   const plain=(label,av,hv)=>`<tr><td></td><td class="pt a">${av}</td><td class="mid">${label}</td><td class="pt h">${hv}</td><td></td></tr>`;
   // one row per lineup slot, so an empty slot stays empty instead of shifting players up
   const slotRows=(A,H,slots)=>{
@@ -147,14 +147,14 @@ function detail(g,slots){
     [...A.starters,...H.starters].forEach(p=>{if(!known.has(p.slot)){known.add(p.slot);order.push(p.slot)}});
     order.forEach(sl=>{const i=used[sl]=(used[sl]??-1)+1;const x=(ma[sl]||[])[i],y=(mh[sl]||[])[i];
       const cell=(p,right)=>p?pName(p,right):'<span class="note">Empty</span>';
-      out+=`<tr><td class="pl">${cell(x,false)}</td><td class="pt a">${x?f1(x.pts):''}</td><td class="mid">${SLOT_LABEL[sl]||''}</td><td class="pt h">${y?f1(y.pts):''}</td><td class="pl r">${cell(y,true)}</td></tr>`});
+      out+=`<tr><td class="pl">${cell(x,false)}</td><td class="pt a">${x?f2(x.pts):''}</td><td class="mid">${SLOT_LABEL[sl]||''}</td><td class="pt h">${y?f2(y.pts):''}</td><td class="pl r">${cell(y,true)}</td></tr>`});
     return out};
   const fw=a.score>h.score?'away':a.score<h.score?'home':'tie';
   return `<div class="detail"><div class="scroll"><table class="mt">
   <colgroup><col><col style="width:84px"><col style="width:190px"><col style="width:84px"><col></colgroup>
   <tr><th class="l" colspan="2">${esc(a.name)}<div class="note">${esc(a.manager)}</div></th><th></th><th class="r" colspan="2">${esc(h.name)}<div class="note">${esc(h.manager)}</div></th></tr>
   ${slotRows(a,h,slots)}
-  <tr class="fin"><td></td><td class="pt a ${win('away',fw)}">${f1(a.score)}</td><td class="mid">Final Score</td><td class="pt h ${win('home',fw)}">${f1(h.score)}</td><td></td></tr>
+  <tr class="fin"><td></td><td class="pt a ${win('away',fw)}">${f2(a.score)}</td><td class="mid">Final Score</td><td class="pt h ${win('home',fw)}">${f2(h.score)}</td><td></td></tr>
   ${lineRows(a.bench,h.bench,p=>p.slot===21?'IR':'Bench')}
   <tr class="sec"><td colspan="5">Positional Breakdown</td></tr>
   ${['QB','RB','WR','TE','D/ST','K'].map(k=>stat(k,a.groups[k],h.groups[k],g.groupWinners[k])).join('')}
@@ -179,8 +179,8 @@ async function viewPrev(){
 
 /* ---------- Managers ---------- */
 const list=(a,fmt)=>a.length?`<ul class="pl">${a.map(fmt).join('')}</ul>`:'<p class="note">Nothing yet.</p>';
-const lead=p=>`<li>${img(p.id)}<span><strong>${esc(p.name)}</strong>${logo(p.team)}<br>${f1(p.pts)} <span class="note">(${f1(p.avg)} avg)</span></span></li>`;
-const perf=p=>`<li>${img(p.id)}<span><strong>${esc(p.name)}</strong>${logo(p.team)}<br>${f1(p.pts)} <span class="note">Week ${p.week}</span></span></li>`;
+const lead=p=>`<li>${img(p.id)}<span><strong>${esc(p.name)}</strong>${logo(p.team)}<br>${f2(p.pts)} <span class="note">(${f2(p.avg)} avg)</span></span></li>`;
+const perf=p=>`<li>${img(p.id)}<span><strong>${esc(p.name)}</strong>${logo(p.team)}<br>${f2(p.pts)} <span class="note">Week ${p.week}</span></span></li>`;
 const FLEX=['RB','WR','TE'], POSCHIPS=['QB','RB','WR','TE','FLEX','D/ST','K'], ROLECHIPS=['Starter','Bench'];
 const SO=[0,2,4,6,3,5,23,7,16,17,20,21];
 async function viewMgr(){
@@ -237,7 +237,7 @@ async function viewSeason(){
   const draw=()=>{
     const x=$('#view .scroll')?.scrollLeft||0;
     rows.sort((a,b)=>sortKey==='name'?sortDir*a.name.localeCompare(b.name):sortDir*(a[sortKey]-b[sortKey]));
-    $('#view').innerHTML=`<div class="bar"><h2>Over the Season</h2><span class="note">Through week ${info.completed}. Select a column to sort, or a team or manager to open their page.</span></div><div class="scroll"><table class="stick"><thead><tr>${COLS.map(([k,l,full,def])=>`<th ${k===sortKey?`aria-sort="${sortDir<0?'descending':'ascending'}"`:''}><button data-k="${k}" title="${full}: ${def}" aria-label="${full}">${l}${k===sortKey?`<span class="arr">${sortDir<0?'▼':'▲'}</span>`:''}</button></th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr><td><button class="lnk" data-go="${r.id}">${esc(r.name)}</button><button class="lnk sm" data-go="${r.id}">${esc(r.manager)}</button></td><td>${r.record}</td><td>${r.totalRecord}</td><td>${f1(r.pf)}</td><td>${f1(r.pa)}</td><td>${f1(r.diff)}</td><td>${f1(r.pfpg)}</td><td>${f1(r.papg)}</td><td>${f1(r.ppf)}</td><td>${f1(r.ppa)}</td><td>${f1(r.pctPf)}%</td><td>${f1(r.pctPa)}%</td></tr>`).join('')}</tbody></table></div>`;
+    $('#view').innerHTML=`<div class="bar"><h2>Over the Season</h2><span class="note">Through week ${info.completed}. Select a column to sort, or a team or manager to open their page.</span></div><div class="scroll"><table class="stick"><thead><tr>${COLS.map(([k,l,full,def])=>`<th ${k===sortKey?`aria-sort="${sortDir<0?'descending':'ascending'}"`:''}><button data-k="${k}" title="${full}: ${def}" aria-label="${full}">${l}${k===sortKey?`<span class="arr">${sortDir<0?'▼':'▲'}</span>`:''}</button></th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr><td><button class="lnk" data-go="${r.id}">${esc(r.name)}</button><button class="lnk sm" data-go="${r.id}">${esc(r.manager)}</button></td><td>${r.record}</td><td>${r.totalRecord}</td><td>${f2(r.pf)}</td><td>${f2(r.pa)}</td><td>${f2(r.diff)}</td><td>${f2(r.pfpg)}</td><td>${f2(r.papg)}</td><td>${f2(r.ppf)}</td><td>${f2(r.ppa)}</td><td>${f1(r.pctPf)}%</td><td>${f1(r.pctPa)}%</td></tr>`).join('')}</tbody></table></div>`;
     $('#view .scroll').scrollLeft=x;
   };
   $('#view').onclick=e=>{
