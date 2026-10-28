@@ -5,6 +5,7 @@ const BENCH = new Set([20, 21]); // bench, IR
 const ELIG = { 0: [1], 2: [2], 3: [2, 3], 4: [3], 5: [3, 4], 6: [4], 7: [1, 2, 3, 4], 16: [16], 17: [5], 23: [2, 3, 4] };
 
 const r1 = (n) => Math.round(n * 10) / 10;
+const r2 = (n) => Math.round(n * 100) / 100;
 
 // Best possible lineup from a full roster, using this league's own lineup slots.
 function optimal(players, slotCounts) {
@@ -91,9 +92,9 @@ function standings(S) {
     id: r.id, name: r.name, manager: r.manager,
     record: rec(r.w, r.l, r.t).str, winPct: r.gp ? (r.w + r.t / 2) / r.gp : 0,
     totalRecord: rec(r.tw, r.tl, r.tt).str, totalPct: r.tw + r.tl + r.tt ? (r.tw + r.tt / 2) / (r.tw + r.tl + r.tt) : 0,
-    pf: r1(r.pf), pa: r1(r.pa), diff: r1(r.pf - r.pa),
-    pfpg: r.gp ? r1(r.pf / r.gp) : 0, papg: r.gp ? r1(r.pa / r.gp) : 0,
-    ppf: r1(r.ppf), ppa: r1(r.ppa),
+    pf: r2(r.pf), pa: r2(r.pa), diff: r2(r.pf - r.pa),
+    pfpg: r.gp ? r2(r.pf / r.gp) : 0, papg: r.gp ? r2(r.pa / r.gp) : 0,
+    ppf: r2(r.ppf), ppa: r2(r.ppa),
     pctPf: r.ppf ? r1((r.pf / r.ppf) * 100) : 0, pctPa: r.ppa ? r1((r.pa / r.ppa) * 100) : 0,
   }));
 }
@@ -120,8 +121,8 @@ function managerView(S, id) {
     });
   }
   const lead = (key, gk) => Object.values(agg).sort((a, b) => b[key] - a[key]).slice(0, 3)
-    .map((x) => ({ id: x.id, name: x.name, team: x.team, pts: r1(x[key]), avg: x[gk] ? r1(x[key] / x[gk]) : 0 }));
-  const best = (started) => perf.filter((p) => p.started === started).sort((a, b) => b.pts - a.pts).slice(0, 3).map((p) => ({ ...p, pts: r1(p.pts) }));
+    .map((x) => ({ id: x.id, name: x.name, team: x.team, pts: r2(x[key]), avg: x[gk] ? r2(x[key] / x[gk]) : 0 }));
+  const best = (started) => perf.filter((p) => p.started === started).sort((a, b) => b.pts - a.pts).slice(0, 3).map((p) => ({ ...p, pts: r2(p.pts) }));
   const nm = (pid) => S.names[pid] || `Player ${pid}`;
   const transactions = Object.values(S.tx)
     .filter((t) => t.status === 'EXECUTED' && t.type !== 'ROSTER' && (t.teamId === id || (t.items || []).some((i) => i.toTeamId === id || i.fromTeamId === id)))
