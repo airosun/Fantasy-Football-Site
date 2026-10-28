@@ -34,6 +34,10 @@ function teamWeek(S, sd) {
 const team = (S, id) => S.teams.find((t) => t.id === id) || { id, name: `Team ${id}`, manager: '' };
 const rec = (w, l, t) => ({ w, l, t, str: t ? `${w}-${l}-${t}` : `${w}-${l}` });
 
+// Starting slots in ESPN order, expanded by this league's counts (e.g. [0,2,2,4,4,6,23,23,16,17])
+const SLOT_ORDER = [0, 2, 4, 6, 3, 5, 23, 7, 16, 17];
+const lineupSlots = (S) => SLOT_ORDER.flatMap((s) => Array((S.slotCounts || {})[s] || 0).fill(s));
+
 function weekView(S, w) {
   const games = S.weeks[w];
   const all = games.flatMap((g) => [g.home.score, g.away.score]);
@@ -48,7 +52,7 @@ function weekView(S, w) {
   };
   const cmp = (a, b) => (Math.abs(a - b) < 0.005 ? 'tie' : a > b ? 'home' : 'away');
   return {
-    week: w, live: w === S.current && !S.finished,
+    week: w, slots: lineupSlots(S), live: w === S.current && !S.finished,
     games: games.map((g) => {
       const home = shape(g.home), away = shape(g.away);
       return {
