@@ -107,16 +107,16 @@ function managerView(S, id) {
       if (!sd) return;
       sd.players.forEach((p) => {
         const started = !BENCH.has(p.slot);
-        const a = (agg[p.id] ||= { id: p.id, name: p.name, started: 0, total: 0, sg: 0, tg: 0 });
-        a.total += p.pts; if (started) a.started += p.pts;
+        const a = (agg[p.id] ||= { id: p.id, name: p.name, team: p.team, started: 0, total: 0, sg: 0, tg: 0 });
+        a.team = p.team; a.total += p.pts; if (started) a.started += p.pts;
         // games for averages: weeks on this roster, skipping the player's NFL bye week
         if (S.byes?.[p.team] !== w) { a.tg++; if (started) a.sg++; }
-        perf.push({ id: p.id, name: p.name, pts: p.pts, week: w, started });
+        perf.push({ id: p.id, name: p.name, team: p.team, pts: p.pts, week: w, started });
       });
     });
   }
   const lead = (key, gk) => Object.values(agg).sort((a, b) => b[key] - a[key]).slice(0, 3)
-    .map((x) => ({ id: x.id, name: x.name, pts: r1(x[key]), avg: x[gk] ? r1(x[key] / x[gk]) : 0 }));
+    .map((x) => ({ id: x.id, name: x.name, team: x.team, pts: r1(x[key]), avg: x[gk] ? r1(x[key] / x[gk]) : 0 }));
   const best = (started) => perf.filter((p) => p.started === started).sort((a, b) => b.pts - a.pts).slice(0, 3).map((p) => ({ ...p, pts: r1(p.pts) }));
   const nm = (pid) => S.names[pid] || `Player ${pid}`;
   const transactions = Object.values(S.tx)
@@ -132,7 +132,7 @@ function managerView(S, id) {
     })).filter((t) => t.lines.length).sort((a, b) => b.date - a.date);
   return {
     id, name: tm.name, manager: tm.manager,
-    roster: tm.roster.map((p) => ({ id: p.id, name: p.name, pos: POS[p.pos] || '?', slot: p.slot, role: BENCH.has(p.slot) ? 'Bench' : 'Starter', ir: p.slot === 21 })),
+    roster: tm.roster.map((p) => ({ id: p.id, name: p.name, team: p.team, pos: POS[p.pos] || '?', slot: p.slot, role: BENCH.has(p.slot) ? 'Bench' : 'Starter', ir: p.slot === 21 })),
     leadersStarted: lead('started', 'sg'), leadersTotal: lead('total', 'tg'),
     bestStarted: best(true), bestBench: best(false),
     transactionTypes: [...new Set(transactions.map((t) => t.type))].sort(),
