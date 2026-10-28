@@ -124,9 +124,9 @@ function matchups(el,wk){
   el.innerHTML=`<div class="games">${wk.games.map((g,i)=>`<button class="game" data-i="${i}" aria-pressed="false">${rowHtml(g.away,g.away.score>g.home.score)}${rowHtml(g.home,g.home.score>g.away.score)}</button>`).join('')}</div><div id="detail"></div>`;
   el.querySelector('.games').onclick=e=>{const b=e.target.closest('.game');if(!b)return;
     el.querySelectorAll('.game').forEach(x=>x.setAttribute('aria-pressed',x===b));
-    el.querySelector('#detail').innerHTML=detail(wk.games[+b.dataset.i]);el.querySelector('#detail').scrollIntoView({behavior:'smooth',block:'nearest'})};
+    el.querySelector('#detail').innerHTML=detail(wk.games[+b.dataset.i],wk.slots);el.querySelector('#detail').scrollIntoView({behavior:'smooth',block:'nearest'})};
 }
-function detail(g){
+function detail(g,slots){
   const a=g.away,h=g.home;
   const win=(side,w)=>w===side?'win':(w==='tie'?'':'loss');
   const pName=(p,right)=>p?(right?`<small>${POS[p.pos]||''}</small>${esc(p.name)}${logo(p.team)}`:`${logo(p.team)}${esc(p.name)}<small>${POS[p.pos]||''}</small>`):'';
@@ -137,12 +137,23 @@ function detail(g){
     return out};
   const stat=(label,av,hv,w)=>`<tr><td></td><td class="pt a ${win('away',w)}">${f1(av)}</td><td class="mid">${label}</td><td class="pt h ${win('home',w)}">${f1(hv)}</td><td></td></tr>`;
   const plain=(label,av,hv)=>`<tr><td></td><td class="pt a">${av}</td><td class="mid">${label}</td><td class="pt h">${hv}</td><td></td></tr>`;
-  const st=t=>t.starters.slice().sort((x,y)=>rank(x)-rank(y));
+  // one row per lineup slot, so an empty slot stays empty instead of shifting players up
+  const slotRows=(A,H,slots)=>{
+    const take=t=>{const m={};t.starters.forEach(p=>(m[p.slot]??=[]).push(p));return m};
+    const ma=take(A),mh=take(H),used={};let out='';
+    const known=new Set(slots);
+    const order=slots.length?slots.slice():[];
+    // any starter in a slot the league config didn't list still gets shown
+    [...A.starters,...H.starters].forEach(p=>{if(!known.has(p.slot)){known.add(p.slot);order.push(p.slot)}});
+    order.forEach(sl=>{const i=used[sl]=(used[sl]??-1)+1;const x=(ma[sl]||[])[i],y=(mh[sl]||[])[i];
+      const cell=(p,right)=>p?pName(p,right):'<span class="note">Empty</span>';
+      out+=`<tr><td class="pl">${cell(x,false)}</td><td class="pt a">${x?f1(x.pts):''}</td><td class="mid">${SLOT_LABEL[sl]||''}</td><td class="pt h">${y?f1(y.pts):''}</td><td class="pl r">${cell(y,true)}</td></tr>`});
+    return out};
   const fw=a.score>h.score?'away':a.score<h.score?'home':'tie';
   return `<div class="detail"><div class="scroll"><table class="mt">
   <colgroup><col><col style="width:84px"><col style="width:190px"><col style="width:84px"><col></colgroup>
   <tr><th class="l" colspan="2">${esc(a.name)}<div class="note">${esc(a.manager)}</div></th><th></th><th class="r" colspan="2">${esc(h.name)}<div class="note">${esc(h.manager)}</div></th></tr>
-  ${lineRows(st(a),st(h),p=>SLOT_LABEL[p.slot]||'')}
+  ${slotRows(a,h,slots)}
   <tr class="fin"><td></td><td class="pt a ${win('away',fw)}">${f1(a.score)}</td><td class="mid">Final Score</td><td class="pt h ${win('home',fw)}">${f1(h.score)}</td><td></td></tr>
   ${lineRows(a.bench,h.bench,p=>p.slot===21?'IR':'Bench')}
   <tr class="sec"><td colspan="5">Positional Breakdown</td></tr>
