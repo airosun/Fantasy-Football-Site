@@ -1,15 +1,15 @@
 // All ESPN-specific code lives here. ESPN's API is unofficial and can change.
 const BASE = 'https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons';
 
+const headers = () => ({
+  Cookie: `espn_s2=${process.env.ESPN_S2}; SWID=${process.env.SWID}`,
+  'User-Agent': 'Mozilla/5.0',
+  Accept: 'application/json',
+});
+
 async function call(season, query) {
   const url = `${BASE}/${season}/segments/0/leagues/${process.env.LEAGUE_ID}?${query}`;
-  const res = await fetch(url, {
-    headers: {
-      Cookie: `espn_s2=${process.env.ESPN_S2}; SWID=${process.env.SWID}`,
-      'User-Agent': 'Mozilla/5.0',
-      Accept: 'application/json',
-    },
-  });
+  const res = await fetch(url, { headers: headers() });
   if (!res.ok) throw new Error(`ESPN returned ${res.status} for season ${season} (${query.split('&')[0]})`);
   return res.json();
 }
@@ -18,6 +18,7 @@ const player = (e) => ({
   id: e.playerId,
   name: e.playerPoolEntry?.player?.fullName || `Player ${e.playerId}`,
   pos: e.playerPoolEntry?.player?.defaultPositionId,
+  team: e.playerPoolEntry?.player?.proTeamId,
   slot: e.lineupSlotId,
   pts: e.playerPoolEntry?.appliedStatTotal ?? 0,
 });
@@ -27,6 +28,24 @@ const side = (s) => ({
   score: s.totalPoints ?? 0,
   players: (s.rosterForCurrentScoringPeriod?.entries || []).map(player),
 });
+
+// NFL bye week for each pro team: { proTeamId: week }. Used so player averages skip bye weeks.
+async function fetchByes(season) {
+  const res = await fetch(`${BASE}/${season}?view=proTeamSchedules_wl`, { headers: headers() });
+  if (!res.ok) throw new Error(`ESPN returned ${res.status} for pro schedules`);
+  const d = await res.json();
+  const out = {};
+  for (const t of d.settings?.proTeams || []) {
+    if (!t.id) continue;
+    let b = t.byeWeek;
+    if (!b && t.proGamesByScoringPeriod) {
+      const have = new Set(Object.keys(t.proGamesByScoringPeriod).map(Number));
+      for (let w = 1; w <= 18; w++) if (!have.has(w)) { b = w; break; }
+    }
+    if (b) out[t.id] = b;
+  }
+  return out;
+}
 
 // Refreshes one season. Finished weeks are kept from `prev` so only recent weeks are re-fetched.
 async function refreshSeason(season, prev) {
@@ -70,8 +89,12 @@ async function refreshSeason(season, prev) {
       } catch (e) { /* transactions are optional; keep going */ }
     }
   }
+  let byes = prev?.byes;
+  if (!byes || !Object.keys(byes).length) {
+    try { byes = await fetchByes(season); } catch (e) { byes = {}; }
+  }
   return {
-    season, total, current, finished,
+    season, total, current, finished, byes,
     completed: finished ? total : current - 1,
     slotCounts: info.settings.rosterSettings.lineupSlotCounts,
     teams, weeks, names, tx: txMap, updated: new Date().toISOString(),

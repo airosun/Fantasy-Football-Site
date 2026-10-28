@@ -94,6 +94,9 @@ function standings(S) {
   }));
 }
 
+const TX_LABEL = { FREE_AGENT: 'Free Agent', WAIVER: 'Waiver', WAIVER_ERROR: 'Waiver', TRADE_ACCEPTED: 'Trade', TRADE_PROPOSAL: 'Trade', DRAFT: 'Draft' };
+const txLabel = (x) => TX_LABEL[x] || x.toLowerCase().split('_').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
+
 function managerView(S, id) {
   const tm = S.teams.find((t) => t.id === id);
   if (!tm) return null;
@@ -104,19 +107,22 @@ function managerView(S, id) {
       if (!sd) return;
       sd.players.forEach((p) => {
         const started = !BENCH.has(p.slot);
-        const a = (agg[p.id] ||= { name: p.name, started: 0, total: 0 });
+        const a = (agg[p.id] ||= { id: p.id, name: p.name, started: 0, total: 0, sg: 0, tg: 0 });
         a.total += p.pts; if (started) a.started += p.pts;
-        perf.push({ name: p.name, pts: p.pts, week: w, started });
+        // games for averages: weeks on this roster, skipping the player's NFL bye week
+        if (S.byes?.[p.team] !== w) { a.tg++; if (started) a.sg++; }
+        perf.push({ id: p.id, name: p.name, pts: p.pts, week: w, started });
       });
     });
   }
-  const top = (arr, key) => arr.sort((a, b) => b[key] - a[key]).slice(0, 3).map((x) => ({ name: x.name, pts: r1(x[key]) }));
-  const list = Object.values(agg);
+  const lead = (key, gk) => Object.values(agg).sort((a, b) => b[key] - a[key]).slice(0, 3)
+    .map((x) => ({ id: x.id, name: x.name, pts: r1(x[key]), avg: x[gk] ? r1(x[key] / x[gk]) : 0 }));
+  const best = (started) => perf.filter((p) => p.started === started).sort((a, b) => b.pts - a.pts).slice(0, 3).map((p) => ({ ...p, pts: r1(p.pts) }));
   const nm = (pid) => S.names[pid] || `Player ${pid}`;
   const transactions = Object.values(S.tx)
     .filter((t) => t.status === 'EXECUTED' && t.type !== 'ROSTER' && (t.teamId === id || (t.items || []).some((i) => i.toTeamId === id || i.fromTeamId === id)))
     .map((t) => ({
-      date: t.processDate || t.proposedDate, type: t.type.replace('_', ' ').toLowerCase(),
+      date: t.processDate || t.proposedDate, type: txLabel(t.type),
       lines: (t.items || []).filter((i) => i.type !== 'LINEUP').map((i) => {
         if (i.type === 'ADD') return `Added ${nm(i.playerId)}`;
         if (i.type === 'DROP') return `Dropped ${nm(i.playerId)}`;
@@ -126,10 +132,10 @@ function managerView(S, id) {
     })).filter((t) => t.lines.length).sort((a, b) => b.date - a.date);
   return {
     id, name: tm.name, manager: tm.manager,
-    roster: tm.roster.map((p) => ({ name: p.name, pos: POS[p.pos] || '?', status: BENCH.has(p.slot) ? (p.slot === 21 ? 'IR' : 'Bench') : 'Starter' })),
-    leadersStarted: top([...list], 'started'), leadersTotal: top([...list], 'total'),
-    bestStarted: perf.filter((p) => p.started).sort((a, b) => b.pts - a.pts).slice(0, 3).map((p) => ({ ...p, pts: r1(p.pts) })),
-    bestBench: perf.filter((p) => !p.started).sort((a, b) => b.pts - a.pts).slice(0, 3).map((p) => ({ ...p, pts: r1(p.pts) })),
+    roster: tm.roster.map((p) => ({ id: p.id, name: p.name, pos: POS[p.pos] || '?', slot: p.slot, role: BENCH.has(p.slot) ? 'Bench' : 'Starter', ir: p.slot === 21 })),
+    leadersStarted: lead('started', 'sg'), leadersTotal: lead('total', 'tg'),
+    bestStarted: best(true), bestBench: best(false),
+    transactionTypes: [...new Set(transactions.map((t) => t.type))].sort(),
     transactions,
   };
 }
