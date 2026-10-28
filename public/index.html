@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Too Many Cucks — League Stats</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--turf:#14372b;--turf2:#1d4a3a;--chalk:#f2f4ef;--card:#fff;--ink:#17211c;--mute:#5d6b63;--line:#d9dfd6;--gold:#e3b23c;--win:#1f7a4d;--loss:#b4382f;--head:'Barlow Condensed','Arial Narrow',sans-serif;--body:'Barlow',system-ui,sans-serif}
+@media(prefers-color-scheme:dark){:root{--chalk:#101a15;--card:#18261f;--ink:#e8eee9;--mute:#9bab9f;--line:#2a3b32;--win:#4fbf86;--loss:#e8776d}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--chalk);color:var(--ink);font:16px/1.45 var(--body)}
+header{background:var(--turf);color:#fff;padding:18px 20px 0}
+.top{max-width:1100px;margin:0 auto;display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap}
+h1{font:700 34px/1 var(--head);margin:0;letter-spacing:.02em}
+nav{max-width:1100px;margin:14px auto 0;display:flex;gap:4px;overflow-x:auto}
+nav button{background:none;border:0;color:#c8d6cd;font:600 18px var(--head);letter-spacing:.03em;padding:10px 16px;cursor:pointer;border-bottom:4px solid transparent;white-space:nowrap}
+nav button[aria-selected=true]{color:#fff;border-color:var(--gold)}
+nav button:focus-visible,select:focus-visible,th button:focus-visible,.game:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+main{max-width:1100px;margin:0 auto;padding:20px}
+select{font:500 16px var(--body);padding:8px 10px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:4px}
+header select{background:var(--turf2);color:#fff;border-color:#33614f}
+.bar{display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.bar h2{font:700 26px var(--head);margin:0}
+.note{color:var(--mute);font-size:14px}
+.games{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px}
+.game{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:0;cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%}
+.game[aria-pressed=true]{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold)}
+.row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;gap:8px}
+.row+.row{border-top:1px solid var(--line)}
+.row .n{font-weight:600}.row .m{font-size:13px;color:var(--mute);display:block;font-weight:400}
+.row .s{font:700 28px var(--head)}.row.w .s{color:var(--win)}
+.detail{background:var(--card);border:1px solid var(--line);border-radius:6px;margin-top:16px;padding:18px}
+.detail h3{font:700 24px var(--head);margin:0 0 12px}
+table{border-collapse:collapse;width:100%}
+th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font:600 15px var(--head);letter-spacing:.03em}
+th button{all:unset;cursor:pointer;font:inherit}
+th[aria-sort] button::after{content:attr(data-arrow);margin-left:4px;color:var(--gold)}
+.scroll{overflow-x:auto}
+td.win{color:var(--win);font-weight:600}td.loss{color:var(--loss)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px}
+.box h3{font:700 22px var(--head);margin:0 0 8px}
+.box ol,.box ul{margin:0;padding-left:20px}.box li{padding:3px 0}
+.box ul.plain{list-style:none;padding:0}
+.tx{border-top:1px solid var(--line);padding:8px 0}.tx small{color:var(--mute)}
+.lineups{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;font-size:14px}
+.err{background:#f6dcd8;color:#6b1f18;padding:12px 14px;border-radius:6px}
+@media(max-width:600px){.lineups{grid-template-columns:1fr}h1{font-size:28px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top"><h1>Too Many Cucks</h1><label class="note" style="color:#c8d6cd">Season <select id="season"></select></label></div>
+  <nav role="tablist" id="tabs"></nav>
+</header>
+<main id="view" aria-live="polite"></main>
+<script>
+const $=s=>document.querySelector(s), esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const f1=n=>(+n).toFixed(1);
+const TABS=[['now','This Week'],['prev','Previous Matchups'],['mgr','Managers'],['season','Over the Season']];
+let season,info,tab='now';
+const api=async p=>{const r=await fetch(`/api/${p}`);const j=await r.json();if(!r.ok)throw new Error(j.error||'Request failed');return j};
+const fail=e=>$('#view').innerHTML=`<div class="err">${esc(e.message)}</div>`;
+
+async function boot(){
+  const s=await api('seasons').catch(fail); if(!s)return;
+  $('#season').innerHTML=s.seasons.map(x=>`<option>${x}</option>`).join('');
+  $('#season').value=season=s.default;
+  $('#season').onchange=e=>{season=e.target.value;load()};
+  $('#tabs').innerHTML=TABS.map(([k,l])=>`<button role="tab" data-k="${k}">${l}</button>`).join('');
+  $('#tabs').onclick=e=>{const k=e.target.dataset.k;if(k){tab=k;render()}};
+  load();
+}
+async function load(){try{info=await api(`${season}/info`);render()}catch(e){fail(e)}}
+function render(){
+  document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.k===tab));
+  ({now:viewNow,prev:viewPrev,mgr:viewMgr,season:viewSeason})[tab]().catch(fail);
+}
+const rowHtml=(t,win,live)=>`<div class="row ${win?'w':''}"><span class="n">${esc(t.name)}<span class="m">${esc(t.manager)} · ${t.total.str} total</span></span><span class="s">${f1(t.score)}</span></div>`;
+function matchups(el,wk){
+  el.innerHTML=`<div class="games">${wk.games.map((g,i)=>`<button class="game" data-i="${i}" aria-pressed="false">${rowHtml(g.away,g.away.score>g.home.score)}${rowHtml(g.home,g.home.score>g.away.score)}</button>`).join('')}</div><div id="detail"></div>`;
+  el.querySelector('.games').onclick=e=>{const b=e.target.closest('.game');if(!b)return;
+    el.querySelectorAll('.game').forEach(x=>x.setAttribute('aria-pressed',x===b));
+    el.querySelector('#detail').innerHTML=detail(wk.games[+b.dataset.i]);el.querySelector('#detail').scrollIntoView({behavior:'smooth',block:'nearest'})};
+}
+function detail(g){
+  const G=['QB','RB','WR','TE','D/ST','K'],a=g.away,h=g.home;
+  const mark=w=>w;
+  const cell=(side,w)=>w===side?'win':(w==='tie'?'':'loss');
+  const line=(label,av,hv,w)=>`<tr><td>${label}</td><td class="${cell('away',w)}">${f1(av)}</td><td class="${cell('home',w)}">${f1(hv)}</td></tr>`;
+  const lu=t=>`<div><strong>${esc(t.name)}</strong><table>${t.starters.map(p=>`<tr><td>${esc(p.name)}</td><td>${f1(p.pts)}</td></tr>`).join('')}</table><div class="note" style="margin-top:8px">Bench</div><table>${t.bench.map(p=>`<tr><td>${esc(p.name)}</td><td>${f1(p.pts)}</td></tr>`).join('')}</table></div>`;
+  return `<div class="detail"><h3>${esc(a.name)} vs ${esc(h.name)}</h3><div class="scroll"><table>
+  <tr><th></th><th>${esc(a.name)}</th><th>${esc(h.name)}</th></tr>
+  ${line('Final score',a.score,h.score,a.score>h.score?'away':a.score<h.score?'home':'tie')}
+  ${G.map(k=>line(k,a.groups[k],h.groups[k],g.groupWinners[k])).join('')}
+  ${line('Potential points',a.potential,h.potential,g.potentialWinner)}
+  <tr><td>% of potential scored</td><td>${f1(a.pct)}%</td><td>${f1(h.pct)}%</td></tr>
+  <tr><td>Total record this week</td><td>${a.total.str}</td><td>${h.total.str}</td></tr></table></div>
+  <div class="lineups">${lu(a)}${lu(h)}</div></div>`;
+}
+async function viewNow(){
+  const wk=await api(`${season}/week/${info.current}`);
+  $('#view').innerHTML=`<div class="bar"><h2>Week ${wk.week} matchups</h2><span class="note">${wk.live?'Scores update during games. ':''}Last refreshed ${new Date(info.updated).toLocaleString()}</span></div><div id="m"></div>`;
+  matchups($('#m'),wk);
+}
+async function viewPrev(){
+  if(info.completed<1){$('#view').innerHTML='<p>No completed weeks yet. Check back after this week’s games.</p>';return}
+  const opts=Array.from({length:info.completed},(_,i)=>info.completed-i);
+  $('#view').innerHTML=`<div class="bar"><h2>Previous matchups</h2><select id="wk" aria-label="Week">${opts.map(w=>`<option value="${w}">Week ${w}</option>`).join('')}</select></div><div id="m"></div>`;
+  const go=async()=>matchups($('#m'),await api(`${season}/week/${$('#wk').value}`));
+  $('#wk').onchange=()=>go().catch(fail);await go();
+}
+const list=(a,fmt)=>a.length?`<ol>${a.map(fmt).join('')}</ol>`:'<p class="note">Nothing yet.</p>';
+async function viewMgr(){
+  $('#view').innerHTML=`<div class="bar"><h2>Managers</h2><select id="mg" aria-label="Manager">${info.teams.map(t=>`<option value="${t.id}">${esc(t.manager||'Unknown')} — ${esc(t.name)}</option>`).join('')}</select></div><div id="m"></div>`;
+  const go=async()=>{const m=await api(`${season}/manager/${$('#mg').value}`);
+    const d=new Date;
+    $('#m').innerHTML=`<h3 style="font:700 28px var(--head);margin:0 0 12px">${esc(m.name)} <span class="note">${esc(m.manager)}</span></h3>
+    <div class="two">
+    <div class="box"><h3>Current roster</h3><table>${m.roster.map(p=>`<tr><td>${esc(p.name)}</td><td>${p.pos}</td><td>${p.status}</td></tr>`).join('')}</table></div>
+    <div><div class="box" style="margin-bottom:16px"><h3>Scoring leaders: started</h3>${list(m.leadersStarted,p=>`<li>${esc(p.name)} — ${f1(p.pts)}</li>`)}<h3 style="margin-top:14px">Scoring leaders: total</h3>${list(m.leadersTotal,p=>`<li>${esc(p.name)} — ${f1(p.pts)}</li>`)}</div>
+    <div class="box"><h3>Top started performances</h3>${list(m.bestStarted,p=>`<li>${esc(p.name)} — ${f1(p.pts)} <span class="note">Week ${p.week}</span></li>`)}<h3 style="margin-top:14px">Top bench performances</h3>${list(m.bestBench,p=>`<li>${esc(p.name)} — ${f1(p.pts)} <span class="note">Week ${p.week}</span></li>`)}</div></div></div>
+    <div class="box" style="margin-top:16px"><h3>Transactions</h3>${m.transactions.length?m.transactions.map(t=>`<div class="tx"><small>${new Date(t.date).toLocaleDateString()} · ${esc(t.type)}</small><br>${t.lines.map(esc).join('<br>')}</div>`).join(''):'<p class="note">No transactions yet.</p>'}</div>`};
+  $('#mg').onchange=()=>go().catch(fail);await go();
+}
+const COLS=[['name','Team','s'],['winPct','Record','rec'],['totalPct','Total record','tot'],['pf','Points for'],['pa','Points against'],['diff','Point diff'],['pfpg','PF / game'],['papg','PA / game'],['ppf','Potential PF'],['ppa','Potential PA'],['pctPf','% of PF scored'],['pctPa','% of PA scored']];
+let sortKey='winPct',sortDir=-1;
+async function viewSeason(){
+  const rows=await api(`${season}/standings`);
+  const draw=()=>{
+    rows.sort((a,b)=>sortKey==='name'?sortDir*a.name.localeCompare(b.name):sortDir*(a[sortKey]-b[sortKey]));
+    $('#view').innerHTML=`<div class="bar"><h2>Over the season</h2><span class="note">Through week ${info.completed}. Click a column to sort.</span></div><div class="scroll"><table><thead><tr>${COLS.map(([k,l])=>`<th ${k===sortKey?`aria-sort="${sortDir<0?'descending':'ascending'}"`:''}><button data-k="${k}" data-arrow="${k===sortKey?(sortDir<0?'▼':'▲'):''}">${l}</button></th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}<span class="note" style="display:block">${esc(r.manager)}</span></td><td>${r.record}</td><td>${r.totalRecord}</td><td>${f1(r.pf)}</td><td>${f1(r.pa)}</td><td>${f1(r.diff)}</td><td>${f1(r.pfpg)}</td><td>${f1(r.papg)}</td><td>${f1(r.ppf)}</td><td>${f1(r.ppa)}</td><td>${f1(r.pctPf)}%</td><td>${f1(r.pctPa)}%</td></tr>`).join('')}</tbody></table></div>`;
+    $('thead').onclick=e=>{const k=e.target.dataset.k;if(!k)return;sortDir=k===sortKey?-sortDir:(k==='name'?1:-1);sortKey=k;draw()};
+  };draw();
+}
+boot();
+</script>
+</body>
+</html>
