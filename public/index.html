@@ -34,6 +34,8 @@ header select{background:var(--turf2);color:#fff;border-color:#33614f}
 .row+.row{border-top:1px solid var(--line)}
 .row .n{font-weight:600}.row .m{font-size:13px;color:var(--mute);display:block;font-weight:400}
 .row .s{font:700 28px var(--head)}.row.w .s{color:var(--win)}
+.row.lead .s{background:var(--gold);color:#17211c;padding:0 8px;border-radius:4px}
+.row.st{justify-content:center;padding:4px 14px}
 .detail{background:var(--card);border:1px solid var(--line);border-radius:6px;margin-top:16px;padding:18px}
 .detail h3{font:700 24px var(--head);margin:0 0 12px}
 table{border-collapse:collapse;width:100%}
@@ -65,6 +67,7 @@ td.win{color:var(--win);font-weight:600}td.loss{color:var(--loss)}
 .mt tr.sec td{background:var(--chalk);font:700 17px var(--head);text-align:left;border-bottom:2px solid var(--line)}
 .mt tr.fin td.mid{font:700 17px var(--head);color:var(--ink)}
 .mt tr.fin td{font:700 24px var(--head);border-top:2px solid var(--ink);border-bottom:2px solid var(--ink)}
+.mt td.lead{background:var(--gold);color:#17211c;font-weight:700}
 .mt td.win{color:var(--win);font-weight:700}.mt td.loss{color:var(--loss);font-weight:400}
 .hs{width:34px;height:34px;border-radius:50%;object-fit:cover;background:var(--line);vertical-align:middle;margin-right:8px;flex:none}
 .hs.none{visibility:hidden}
@@ -146,7 +149,10 @@ async function boot(){
   load();
 }
 async function load(){try{info=await api(`${season}/info`);if(season===latest)curWeek=info.current;render()}catch(e){fail(e)}}
+let liveT=null,liveGen=0;
+function stopLive(){liveGen++;clearTimeout(liveT);liveT=null}
 function render(){
+  stopLive();
   $('#view').onclick=null;
   document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.k===tab));
   ({now:viewNow,prev:viewPrev,mgr:viewMgr,season:viewSeason})[tab]().catch(fail);
@@ -157,16 +163,28 @@ const SLOT_ORDER=[0,2,4,6,3,5,23,7,16,17];
 const SLOT_LABEL={0:'QB',2:'RB',3:'RB/WR',4:'WR',5:'WR/TE',6:'TE',7:'OP',16:'D/ST',17:'K',23:'FLEX'};
 const POS={1:'QB',2:'RB',3:'WR',4:'TE',5:'K',16:'D/ST'};
 const rank=p=>{const i=SLOT_ORDER.indexOf(p.slot);return i<0?99:i};
-const rowHtml=(t,win)=>`<div class="row ${win?'w':''}"><span class="n">${esc(t.name)}<span class="m">${esc(t.manager)} · ${t.total.str} Total Record</span></span><span class="s">${f2(t.score)}</span></div>`;
+const rowHtml=(t,cls)=>`<div class="row ${cls}"><span class="n">${esc(t.name)}<span class="m">${esc(t.manager)} · ${t.total.str} Total Record</span></span><span class="s">${f2(t.score)}</span></div>`;
+// green = winner of a finished matchup; yellow = currently leading a matchup still in progress
+const leadCls=(g,side)=>{const a=g[side].score,b=g[side==='home'?'away':'home'].score;return a>b?(g.final?'w':'lead'):''};
 function matchups(el,wk){
-  el.innerHTML=`<div class="games">${wk.games.map((g,i)=>`<button class="game" data-i="${i}" aria-pressed="false">${rowHtml(g.away,g.away.score>g.home.score)}${rowHtml(g.home,g.home.score>g.away.score)}</button>`).join('')}</div><div id="detail"></div>`;
-  el.querySelector('.games').onclick=e=>{const b=e.target.closest('.game');if(!b)return;
-    el.querySelectorAll('.game').forEach(x=>x.setAttribute('aria-pressed',x===b));
-    el.querySelector('#detail').innerHTML=detail(wk.games[+b.dataset.i],wk.slots);el.querySelector('#detail').scrollIntoView({behavior:'smooth',block:'nearest'})};
+  let cur=wk,sel=-1;
+  el.innerHTML='<div class="games"></div><div id="detail"></div>';
+  const box=el.querySelector('.games'),det=el.querySelector('#detail');
+  const cards=()=>{box.innerHTML=cur.games.map((g,i)=>`<button class="game" data-i="${i}" aria-pressed="${i===sel}">${rowHtml(g.away,leadCls(g,'away'))}${rowHtml(g.home,leadCls(g,'home'))}${g.final?'':'<div class="row st"><span class="note">In Progress</span></div>'}</button>`).join('')};
+  const panel=()=>{det.innerHTML=sel>=0&&cur.games[sel]?detail(cur.games[sel],cur.slots):''};
+  cards();
+  box.onclick=e=>{const b=e.target.closest('.game');if(!b)return;
+    sel=+b.dataset.i;
+    box.querySelectorAll('.game').forEach(x=>x.setAttribute('aria-pressed',x===b));
+    panel();det.scrollIntoView({behavior:'smooth',block:'nearest'})};
+  return {update(n){
+    const f=document.activeElement,fi=f&&f.classList&&f.classList.contains('game')?f.dataset.i:null;
+    cur=n;cards();panel();
+    if(fi!==null){const b=box.querySelector('.game[data-i="'+fi+'"]');if(b)b.focus()}}};
 }
 function detail(g,slots){
   const a=g.away,h=g.home;
-  const win=(side,w)=>w===side?'win':(w==='tie'?'':'loss');
+  const win=(side,w)=>w===side?(g.final?'win':'lead'):(w==='tie'||!g.final?'':'loss');
   const pName=(p,right)=>p?(right?`<small>${POS[p.pos]||''}</small>${esc(p.name)}${logo(p.team)}`:`${logo(p.team)}${esc(p.name)}<small>${POS[p.pos]||''}</small>`):'';
   const lineRows=(A,H,labelFn)=>{
     const n=Math.max(A.length,H.length);let out='';
@@ -192,7 +210,7 @@ function detail(g,slots){
   <colgroup><col><col class="cp"><col class="cm"><col class="cp"><col></colgroup>
   <tr><th class="l" colspan="2">${esc(a.name)}<div class="note">${esc(a.manager)}</div></th><th></th><th class="r" colspan="2">${esc(h.name)}<div class="note">${esc(h.manager)}</div></th></tr>
   ${slotRows(a,h,slots)}
-  <tr class="fin"><td></td><td class="pt a ${win('away',fw)}">${f2(a.score)}</td><td class="mid">Final Score</td><td class="pt h ${win('home',fw)}">${f2(h.score)}</td><td></td></tr>
+  <tr class="fin"><td></td><td class="pt a ${win('away',fw)}">${f2(a.score)}</td><td class="mid">${g.final?'Final Score':'Current Score'}</td><td class="pt h ${win('home',fw)}">${f2(h.score)}</td><td></td></tr>
   ${lineRows(a.bench,h.bench,p=>p.slot===21?'IR':'Bench')}
   <tr class="sec"><td colspan="5">Positional Breakdown</td></tr>
   ${['QB','RB','WR','TE','D/ST','K'].map(k=>stat(k,a.groups[k],h.groups[k],g.groupWinners[k])).join('')}
@@ -213,8 +231,31 @@ async function viewNow(){
   const wk=await api(`${season}/week/${w}`);
   $('#view').innerHTML=throwback
    ?`<div class="bar"><h2>Throwback Matchups - Week ${w}</h2><span class="note">From the ${season} season</span></div><div id="m"></div>`
-   :`<div class="bar"><h2>Week ${wk.week} Matchups</h2><span class="note">${wk.live?'Scores update during games. ':''}Last refreshed ${new Date(info.updated).toLocaleString()}</span></div><div id="m"></div>`;
-  matchups($('#m'),wk);
+   :`<div class="bar"><h2>Week ${wk.week} Matchups</h2><span class="note"><span id="liveh">${wk.live?'Scores update automatically as games are played. ':''}</span>Last updated <span id="upd">${new Date(wk.updated||info.updated).toLocaleTimeString()}</span></span></div><div id="m"></div>`;
+  const ctl=matchups($('#m'),wk);
+  if(throwback)return;
+  // Keep the scoreboard current: every 30s while games are in progress, every 5 min otherwise.
+  const my=liveGen;let last=JSON.stringify(wk.games);
+  const tick=async()=>{
+    let delay=30000;
+    try{
+      if(!document.hidden){
+        const inf=await api(`${season}/info`);
+        if(my!==liveGen)return;
+        if(inf.current!==w){info=inf;curWeek=inf.current;render();return}   // a new week has started
+        const n=await api(`${season}/week/${w}`);
+        if(my!==liveGen)return;
+        info=inf;
+        const j=JSON.stringify(n.games);
+        if(j!==last){last=j;ctl.update(n)}
+        const u=$('#upd');if(u)u.textContent=new Date(n.updated||inf.updated).toLocaleTimeString();
+        const h=$('#liveh');if(h)h.textContent=n.live?'Scores update automatically as games are played. ':'';
+        delay=n.live?30000:300000;
+      }
+    }catch(e){delay=60000}
+    if(my===liveGen)liveT=setTimeout(tick,delay);
+  };
+  liveT=setTimeout(tick,wk.live?30000:300000);
 }
 async function viewPrev(){
   if(info.completed<1){$('#view').innerHTML='<p>No completed weeks yet. Check back after this week’s games.</p>';return}
