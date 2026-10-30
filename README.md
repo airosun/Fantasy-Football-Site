@@ -18,3 +18,4 @@ Stats site for an ESPN fantasy football league. Pages: This Week, Previous Match
 - All ESPN-specific code is in `espn.js`; all calculations are in `stats.js`.
 - Free Render services sleep when idle, so the first visit after a quiet spell takes about a minute.
 - If the ESPN cookies expire (they last a long time, but it happens), update them in Render.
+- Live scores: while games are in progress and someone has the site open, the server re-reads the current week from ESPN every minute and the page refreshes itself every 30 seconds. A leading team is shown in yellow, and the winner turns green once ESPN marks the matchup final. Nothing extra is requested from ESPN when no one is viewing the site.

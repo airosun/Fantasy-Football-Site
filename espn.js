@@ -30,11 +30,25 @@ const player = (e) => ({
   pts: e.playerPoolEntry?.appliedStatTotal ?? 0,
 });
 
-const side = (s) => ({
-  teamId: s.teamId,
-  score: s.totalPoints ?? 0,
-  players: (s.rosterForCurrentScoringPeriod?.entries || []).map(player),
-});
+const r2 = (n) => Math.round(n * 100) / 100;
+
+// While a matchup is still in progress the score is the sum of the starters' points, so the
+// scoreboard moves as each player's points move. Once ESPN calls the matchup, its own total is used.
+const side = (s, decided) => {
+  const players = (s.rosterForCurrentScoringPeriod?.entries || []).map(player);
+  const starters = players.filter((p) => p.slot !== 20 && p.slot !== 21);
+  const live = r2(starters.reduce((a, p) => a + p.pts, 0));
+  return { teamId: s.teamId, score: decided || !players.length ? (s.totalPoints ?? 0) : live, players };
+};
+
+// `final` forces every matchup to count as decided (used for weeks that are already over).
+const parseWeek = (d, w, final) =>
+  d.schedule
+    .filter((m) => m.matchupPeriodId === w && m.home && m.away)
+    .map((m) => {
+      const decided = final || m.winner === undefined || m.winner !== 'UNDECIDED';
+      return { decided, home: side(m.home, decided), away: side(m.away, decided) };
+    });
 
 // NFL bye week for each pro team: { proTeamId: week }. Used so player averages skip bye weeks.
 async function fetchByes(season) {
@@ -83,9 +97,7 @@ async function refreshSeason(season, prev) {
     const recent = w >= current - 1;
     if (!weeks[w] || recent) {
       const d = await call(season, `view=mMatchupScore&view=mMatchup&scoringPeriodId=${w}`);
-      weeks[w] = d.schedule
-        .filter((m) => m.matchupPeriodId === w && m.home && m.away)
-        .map((m) => ({ home: side(m.home), away: side(m.away) }));
+      weeks[w] = parseWeek(d, w, w < current || finished);
       weeks[w].forEach((g) =>
         [g.home, g.away].forEach((s) => s.players.forEach((p) => (names[p.id] = p.name)))
       );
@@ -109,4 +121,10 @@ async function refreshSeason(season, prev) {
   };
 }
 
-module.exports = { refreshSeason, nflSeason };
+// Lightweight refresh of just the current week's scoreboard (one ESPN call). Returns the new games.
+async function refreshLive(season, S) {
+  const d = await call(season, `view=mMatchupScore&view=mMatchup&scoringPeriodId=${S.current}`);
+  return parseWeek(d, S.current, false);
+}
+
+module.exports = { refreshSeason, refreshLive, nflSeason };

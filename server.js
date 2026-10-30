@@ -1,6 +1,6 @@
 const path = require('path');
 const express = require('express');
-const { refreshSeason, nflSeason } = require('./espn');
+const { refreshSeason, refreshLive, nflSeason } = require('./espn');
 const stats = require('./stats');
 
 const app = express();
@@ -43,15 +43,41 @@ async function refreshAll() {
   }
 }
 
+// Live scores: while a matchup is still in progress and someone has the site open, re-read the
+// current week's scoreboard every minute. Nobody watching means no extra calls to ESPN.
+let lastHit = 0;
+let liveBusy = false;
+async function liveTick() {
+  if (liveBusy || Date.now() - lastHit > 10 * 60 * 1000) return;
+  liveBusy = true;
+  try {
+    for (const s of known) {
+      const S = state[s];
+      if (!S || S.finished) continue;
+      const games = S.weeks[S.current] || [];
+      if (!games.some((g) => g.decided === false)) continue;
+      try {
+        const fresh = await refreshLive(s, S);
+        const cur = state[s];
+        if (cur && cur.current === S.current) {
+          state[s] = { ...cur, weeks: { ...cur.weeks, [S.current]: fresh }, updated: new Date().toISOString() };
+        }
+      } catch (e) { console.error(`Live refresh failed for ${s}:`, e.message); }
+    }
+  } finally { liveBusy = false; }
+}
+
 (async () => {
   if (explicit.length) { for (const s of explicit) await load(s); }
   else await discover();
+  setInterval(liveTick, 60 * 1000);
   setInterval(refreshAll, 15 * 60 * 1000); // scores and the Wednesday week change are picked up automatically
 })();
 
 const loaded = () => known.filter((s) => state[s]).sort((a, b) => b - a);
 
 const need = (req, res, next) => {
+  lastHit = Date.now();
   const S = state[req.params.season];
   if (!S) return res.status(503).json({ error: errors[req.params.season] || 'Data is still loading. Try again in a minute.' });
   req.S = S;
